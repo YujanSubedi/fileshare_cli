@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 fn file_exists(filename: &str) -> bool {
     Path::new(filename).exists()
@@ -16,6 +18,7 @@ fn send_file(stream: TcpStream, filepath: &String) -> io::Result<()> {
     file.read_to_end(&mut contents)?;
 
     write_stream.write_all(filepath.as_bytes())?;
+    thread::sleep(Duration::from_secs(1));
 
     write_stream.write_all(&contents)?;
     Ok(())

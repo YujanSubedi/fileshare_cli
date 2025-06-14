@@ -6,10 +6,6 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
-fn file_exists(filename: &str) -> bool {
-    Path::new(filename).exists()
-}
-
 fn send_file(stream: TcpStream, filepath: &String) -> io::Result<()> {
     let mut write_stream = stream;
 
@@ -42,7 +38,7 @@ fn receive_file(stream: TcpStream) -> io::Result<()> {
     let mut store_filename = format!("{}", filename);
     let mut curr_value = 1;
 
-    while file_exists(&store_filename) {
+    while Path::new(&store_filename).exists() {
         store_filename = format!("{}_{}", filename, curr_value);
         curr_value += 1;
     }
@@ -63,18 +59,21 @@ fn receive_file(stream: TcpStream) -> io::Result<()> {
     Ok(())
 }
 
-fn server_fn(addr: &str, filepath: String) -> io::Result<()> {
+fn server_fn(addr: &str, filepath: &String) -> io::Result<()> {
+    if !(Path::new(&filepath).exists()) {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "File not found",
+        ));
+    }
+
     let listener = TcpListener::bind(&addr)?;
     println!("Server running: {}", addr);
 
     for connection_stream in listener.incoming() {
-        match connection_stream {
-            Ok(stream) => {
-                println!("New Connection: {}", stream.peer_addr()?);
-                send_file(stream, &filepath)?;
-            }
-            Err(e) => eprintln!("Connection failed: {}", e),
-        }
+        let handled_stream = connection_stream?;
+        println!("New Connection: {}", handled_stream.peer_addr()?);
+        send_file(handled_stream, &filepath)?;
     }
     Ok(())
 }
@@ -87,19 +86,18 @@ fn client_fn(addr: &str) -> io::Result<()> {
     Ok(())
 }
 
-// usage sft ip_address port_address filelocation
+// usage server: fileshare_cli ip_address port_address filelocation
+// usage client: fileshare_cli ip_address port_address
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-
     // println!("{:?}", args);
 
-    if args.len() > 2 && args.len() < 5 {
-        let ip_address: String = args[1].clone();
-        let port_address: String = args[2].clone();
-        let addr = format!("{}:{}", ip_address, port_address);
+    if args.len() == 3 || args.len() == 4 {
+        let addr = format!("{}:{}", &args[1], &args[2]);
+
         let result = if args.len() == 4 {
-            server_fn(&addr, args[3].clone())
+            server_fn(&addr, &args[3])
         } else {
             client_fn(&addr)
         };
@@ -107,6 +105,8 @@ fn main() {
             eprintln!("Error: {}", e);
         }
     } else {
-        println!("Usage binary ip_address port_address [filelocation]");
+        eprintln!("Server Usage: binary ip_address port_address file_path");
+        eprintln!("Client Usage: binary ip_address port_address");
+        std::process::exit(1);
     }
 }

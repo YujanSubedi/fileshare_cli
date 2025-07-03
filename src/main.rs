@@ -6,23 +6,18 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
-fn send_file(stream: TcpStream, filepath: &String) -> io::Result<()> {
-    let mut write_stream = stream;
-
-    let mut file = File::open(filepath)?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
+fn send_file(mut write_stream: TcpStream, filepath: &str) -> io::Result<()> {
+    let contents = std::fs::read(filepath)?;
 
     write_stream.write_all(filepath.as_bytes())?;
-    thread::sleep(Duration::from_secs(1));
+    thread::sleep(Duration::from_millis(50));
 
     write_stream.write_all(&contents)?;
     Ok(())
 }
 
-fn receive_file(stream: TcpStream) -> io::Result<()> {
-    let mut read_stream = stream;
-    let mut buffer = [0; 512];
+fn receive_file(mut read_stream: TcpStream) -> io::Result<()> {
+    let mut buffer = [0; 1024];
 
     let read_size = read_stream.read(&mut buffer)?;
     if read_size == 0 {
@@ -35,7 +30,7 @@ fn receive_file(stream: TcpStream) -> io::Result<()> {
     let filename = String::from_utf8_lossy(&buffer[..read_size])
         .trim()
         .to_string();
-    let mut store_filename = format!("{}", filename);
+    let mut store_filename = filename.to_string();
     let mut curr_value = 1;
 
     while Path::new(&store_filename).exists() {
@@ -59,7 +54,7 @@ fn receive_file(stream: TcpStream) -> io::Result<()> {
     Ok(())
 }
 
-fn server_fn(addr: &str, filepath: &String) -> io::Result<()> {
+fn server_fn(addr: &str, filepath: &str) -> io::Result<()> {
     if !(Path::new(&filepath).exists()) {
         return Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
@@ -67,13 +62,19 @@ fn server_fn(addr: &str, filepath: &String) -> io::Result<()> {
         ));
     }
 
-    let listener = TcpListener::bind(&addr)?;
+    let listener = TcpListener::bind(addr)?;
     println!("Server running: {}", addr);
 
     for connection_stream in listener.incoming() {
         let handled_stream = connection_stream?;
         println!("New Connection: {}", handled_stream.peer_addr()?);
-        send_file(handled_stream, &filepath)?;
+        // send_file(handled_stream, filepath)?;
+        let file_path_clone = filepath.to_string();
+        thread::spawn(move || {
+            if let Err(e) = send_file(handled_stream, &file_path_clone) {
+                eprintln!("Error: {}", e);
+            }
+        });
     }
     Ok(())
 }
@@ -94,7 +95,7 @@ fn main() {
     // println!("{:?}", args);
 
     if args.len() == 3 || args.len() == 4 {
-        let addr = format!("{}:{}", &args[1], &args[2]);
+        let addr = format!("{}:{}", args[1], args[2]);
 
         let result = if args.len() == 4 {
             server_fn(&addr, &args[3])

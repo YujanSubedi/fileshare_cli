@@ -20,6 +20,8 @@ Add the following on ~/.bash_profile or ~/.zprofile
 export PATH="${PATH}":"${HOME}/.local/bin"
 ```
 
+------
+
 ## Server
 
 > Command:
@@ -46,10 +48,6 @@ cargo run ip_adress port_address filepath
 cargo run ip_adress port_address
 ```
 
-------
-
-> ip address on \[\] if on ipv6
->
 ------
 
 ## Todo

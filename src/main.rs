@@ -9,7 +9,12 @@ use std::time::Duration;
 fn send_file(mut write_stream: TcpStream, filepath: &str) -> io::Result<()> {
     let contents = std::fs::read(filepath)?;
 
-    write_stream.write_all(filepath.as_bytes())?;
+    let filename = match filepath.rsplit('/').next() {
+        Some(name) => name,
+        None => return Ok(()),
+    };
+
+    write_stream.write_all(filename.as_bytes())?;
     thread::sleep(Duration::from_millis(50));
 
     write_stream.write_all(&contents)?;
@@ -34,11 +39,11 @@ fn receive_file(mut read_stream: TcpStream) -> io::Result<()> {
     let mut curr_value = 1;
 
     while Path::new(&store_filename).exists() {
-        store_filename = format!("{}_{}", filename, curr_value);
+        store_filename = format!("{filename}_{curr_value}");
         curr_value += 1;
     }
 
-    println!("Receiving file: {}", filename);
+    println!("Receiving file: {filename}");
 
     let mut file = File::create(&store_filename)?;
     loop {
@@ -50,7 +55,7 @@ fn receive_file(mut read_stream: TcpStream) -> io::Result<()> {
         file.write_all(&buffer[..bytes_read])?;
     }
 
-    println!("Saved file as: {}", store_filename);
+    println!("Saved file as: {store_filename}");
     Ok(())
 }
 
@@ -63,7 +68,7 @@ fn server_fn(addr: &str, filepath: &str) -> io::Result<()> {
     }
 
     let listener = TcpListener::bind(addr)?;
-    println!("Server running: {}", addr);
+    println!("Server running: {addr}");
 
     for connection_stream in listener.incoming() {
         let handled_stream = connection_stream?;
@@ -72,7 +77,7 @@ fn server_fn(addr: &str, filepath: &str) -> io::Result<()> {
         let file_path_clone = filepath.to_string();
         thread::spawn(move || {
             if let Err(e) = send_file(handled_stream, &file_path_clone) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
             }
         });
     }
@@ -81,7 +86,7 @@ fn server_fn(addr: &str, filepath: &str) -> io::Result<()> {
 
 fn client_fn(addr: &str) -> io::Result<()> {
     let stream = TcpStream::connect(addr)?;
-    println!("Connected to server: {}", addr);
+    println!("Connected to server: {addr}");
     receive_file(stream)?;
 
     Ok(())
@@ -103,7 +108,7 @@ fn main() {
             client_fn(&addr)
         };
         if let Err(e) = result {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
         }
     } else {
         eprintln!("Server Usage: binary ip_address port_address file_path");
